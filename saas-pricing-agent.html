@@ -6,7 +6,7 @@
 <meta http-equiv="X-Content-Type-Options" content="nosniff">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SaaS Pricing Agent</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" integrity="sha384-OLBgp1GsljhM2TJ+sbHjaiH9txEUvgdDTAzHv2P24donTt6/529l+9Ua0vFImLlb" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -186,6 +186,8 @@ select.fi-sm{text-align:left;cursor:pointer}
 .input-row-sub{font-size:10px;color:var(--ink4)}
 .input-row-right{display:flex;align-items:center;gap:5px;flex-shrink:0}
 .input-row-unit{font-size:11px;color:var(--ink3)}
+.lic-row-inactive td{opacity:.42}
+.lic-row-inactive td:last-child{opacity:1}
 .sec-total-row{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-radius:6px;margin-top:10px}
 .sec-total-row.blue{background:var(--blue-light);color:var(--blue)}
 .sec-total-row.purple{background:var(--purple-light);color:var(--purple)}
@@ -553,6 +555,7 @@ select.fi-sm{text-align:left;cursor:pointer}
   <button onclick="showTab('azure',this)">☁️ Azure Pricing</button>
   <button onclick="showTab('support',this)">👥 Support Staff</button>
   <button onclick="showTab('security',this)">🔒 Security & Compliance</button>
+  <button onclick="showTab('licenses',this)">📜 Licenses</button>
   <button onclick="showTab('summary',this)">📊 Pricing Summary</button>
   <button onclick="showTab('projections',this)">📈 Financial Projections</button>
   <button onclick="showTab('tiers',this)">📦 Pricing Tiers</button>
@@ -876,8 +879,15 @@ select.fi-sm{text-align:left;cursor:pointer}
   <p class="section-intro">Configure Azure costs per environment. Use the service breakdown or enter a simplified total override. The Charge Per Customer row is always calculated automatically.</p>
   <div class="tab-save-bar"><span class="tab-save-time" id="save-time-azure"></span><button class="tab-save-btn" id="save-btn-azure" onclick="manualSave('azure')">💾 Save Changes</button></div>
   <div class="card" style="margin-bottom:16px">
-    <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap">
+    <div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap">
       <label style="display:flex;align-items:center;gap:8px"><span class="muted">Number of customers:</span><input class="fi-sm" type="number" id="az-cust" value="5" min="1" style="width:80px;text-align:left" oninput="syncAzCust();recalcAllAz()"></label>
+      <label style="display:flex;align-items:center;gap:8px" title="Benchmark / reference price (e.g. Microsoft Compass quote) to compare against your computed Azure COGS. Informational only — does not affect margin calculations.">
+        <span class="muted">🧭 Compass Price:</span>
+        <span style="font-size:12px;color:var(--ink3);font-family:var(--mono)">$</span>
+        <input class="fi-sm" type="number" id="az-compass-price" value="0" min="0" step="any" style="width:110px;text-align:right" oninput="recalcAllAz();saveState()">
+        <span class="muted" style="font-size:11px">USD / month</span>
+      </label>
+      <span id="az-compass-delta" style="font-size:11px;font-family:var(--mono);color:var(--ink3);padding:4px 10px;border-radius:12px;background:var(--surface3);border:1px solid var(--border)">Δ vs Single Tenant: —</span>
     </div>
   </div>
   <div class="env-tabs">
@@ -1196,10 +1206,110 @@ select.fi-sm{text-align:left;cursor:pointer}
   <div class="sec-grand-total" id="infra-grand-total"></div>
 </div>
 
+<!-- ═══ TAB 4B: LICENSES ═══ -->
+<div id="pane-licenses" class="pane">
+  <p class="section-intro">Enter recurring software license, tooling and shared-services costs. Costs are totalled monthly and <strong>amortised across your customer base</strong> in the Pricing Summary — the per-customer allocation contributes to COGS. Toggle any row <em>N/A</em> to exclude it.</p>
+  <div class="tab-save-bar"><span class="tab-save-time" id="save-time-licenses"></span><button class="tab-save-btn" id="save-btn-licenses" onclick="manualSave('licenses')">💾 Save Changes</button></div>
+
+  <div class="card" style="margin-bottom:14px;padding:12px 16px;background:#fff7ed;border-left:4px solid #f97316">
+    <div style="display:flex;align-items:flex-start;gap:10px">
+      <span style="font-size:18px">💡</span>
+      <div style="font-size:12px;color:#7c2d12;line-height:1.65">Enter the <strong>total monthly cost</strong> for each license (not per-user). For per-seat tools, multiply by your headcount before entering. Costs are amortised equally across the customer base you configure above — so 10 customers means each carries 1/10th of every shared license.</div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px">
+    <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;margin-bottom:4px">
+      <label style="display:flex;align-items:center;gap:8px"><span class="muted">Number of customers:</span><input class="fi-sm" type="number" id="lic-cust" value="5" min="1" style="width:80px;text-align:left" oninput="syncLicCust();updateLicenses()"></label>
+      <span style="font-size:11px;color:var(--ink3);font-style:italic">Synced with other tabs. Changes here update everywhere.</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="sec-title">📜 Software Licenses, Tooling &amp; Shared Services
+      <span class="badge tag-blue" id="lic-count-badge" style="margin-left:auto">0 active</span>
+    </div>
+
+    <div style="overflow-x:auto">
+      <table class="az-table" id="lic-table" style="min-width:920px">
+        <thead>
+          <tr>
+            <th style="width:26%">Tool / License</th>
+            <th style="width:28%">Description</th>
+            <th class="num" style="width:14%">$/month</th>
+            <th class="num" style="width:14%">$/year</th>
+            <th class="num" style="width:12%;color:var(--green)">Per-customer /mo</th>
+            <th style="width:6%;text-align:center">Status</th>
+          </tr>
+        </thead>
+        <tbody id="lic-tbody"></tbody>
+        <tfoot>
+          <tr class="az-tot" style="background:var(--navy)!important;color:#e2e8f0">
+            <td colspan="2" style="font-weight:700;padding:12px 12px;background:var(--navy)!important;color:#fff">GRAND TOTAL — All Active Licenses</td>
+            <td class="num-cell" id="lic-total-mo" style="background:var(--navy)!important;color:#93c5fd;font-weight:700">—</td>
+            <td class="num-cell" id="lic-total-yr" style="background:var(--navy)!important;color:#93c5fd;font-weight:700">—</td>
+            <td class="num-cell" id="lic-total-pc" style="background:var(--navy)!important;color:#6ee7b7;font-weight:700">—</td>
+            <td style="background:var(--navy)!important"></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+
+    <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;align-items:center">
+      <button onclick="addCustomLicense()" style="padding:8px 14px;font-size:12px;font-weight:600;background:var(--blue-light);color:var(--blue);border:1px dashed var(--blue);border-radius:7px;cursor:pointer;font-family:var(--font);display:inline-flex;align-items:center;gap:7px">
+        <span style="font-size:14px">➕</span> Add additional tool
+      </button>
+      <button onclick="resetLicenses()" style="padding:8px 14px;font-size:12px;font-weight:500;background:var(--surface);color:var(--ink3);border:1px solid var(--border);border-radius:7px;cursor:pointer;font-family:var(--font)" title="Reset all license rows to defaults (zero values)">🔄 Reset rows</button>
+      <span style="font-size:11px;color:var(--ink3);margin-left:auto">Applicable rows → Pricing Summary. N/A rows are zeroed.</span>
+    </div>
+  </div>
+
+  <!-- Summary cards -->
+  <div class="card" style="margin-top:14px;background:linear-gradient(135deg,#eff6ff,#f0fdf4);border:1px solid #bae6fd">
+    <div class="sec-title" style="border-bottom-color:#bae6fd">📊 License Cost Summary</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px">
+      <div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:14px;text-align:center">
+        <div style="font-size:10px;font-family:var(--mono);color:var(--ink4);text-transform:uppercase;letter-spacing:.08em">Total / month</div>
+        <div style="font-size:22px;font-weight:700;color:var(--navy);margin-top:4px;font-family:var(--mono)" id="lic-sum-mo">$0</div>
+      </div>
+      <div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:14px;text-align:center">
+        <div style="font-size:10px;font-family:var(--mono);color:var(--ink4);text-transform:uppercase;letter-spacing:.08em">Total / year</div>
+        <div style="font-size:22px;font-weight:700;color:var(--navy);margin-top:4px;font-family:var(--mono)" id="lic-sum-yr">$0</div>
+      </div>
+      <div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:14px;text-align:center">
+        <div style="font-size:10px;font-family:var(--mono);color:var(--ink4);text-transform:uppercase;letter-spacing:.08em">Per customer / mo</div>
+        <div style="font-size:22px;font-weight:700;color:var(--green);margin-top:4px;font-family:var(--mono)" id="lic-sum-pc">$0</div>
+      </div>
+      <div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:14px;text-align:center">
+        <div style="font-size:10px;font-family:var(--mono);color:var(--ink4);text-transform:uppercase;letter-spacing:.08em">Active rows</div>
+        <div style="font-size:22px;font-weight:700;color:var(--blue);margin-top:4px;font-family:var(--mono)" id="lic-sum-count">0</div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ TAB 5: PRICING SUMMARY ═══ -->
 <div id="pane-summary" class="pane">
   <p class="section-intro">Complete pricing breakdown across all four deployment models with all cost components — Azure, support, security, compliance, governance, IT overhead, and model pricing. On-Premises includes hardware, deployment, and professional services.</p>
   <div class="tab-save-bar"><span class="tab-save-time" id="save-time-summary"></span><button class="tab-save-btn" id="save-btn-summary" onclick="manualSave('summary')">💾 Save Changes</button></div>
+
+  <!-- Report Download Bar -->
+  <div class="card" style="margin-bottom:14px;padding:14px 18px;background:linear-gradient(135deg,#f0f9ff,#ecfdf5);border-left:4px solid var(--blue)">
+    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+      <div style="flex:1;min-width:260px">
+        <div style="font-size:13px;font-weight:700;color:var(--ink);margin-bottom:3px">📥 Download Full Pricing Report</div>
+        <div style="font-size:11px;color:var(--ink3);line-height:1.55">Export the complete pricing summary — all models, Azure COGS, support, security, compliance and margins — as an Excel workbook or a print-ready PDF.</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button onclick="exportXLS()" style="padding:9px 16px;font-size:12px;font-weight:600;background:#065f46;color:#fff;border:1px solid #065f46;border-radius:7px;cursor:pointer;font-family:var(--font);display:inline-flex;align-items:center;gap:7px;transition:background .15s" onmouseover="this.style.background='#047857'" onmouseout="this.style.background='#065f46'" title="Download complete pricing workbook with all sheets">
+          <span style="font-size:14px">📊</span> Download as Excel
+        </button>
+        <button onclick="exportSummaryPDF()" style="padding:9px 16px;font-size:12px;font-weight:600;background:#991b1b;color:#fff;border:1px solid #991b1b;border-radius:7px;cursor:pointer;font-family:var(--font);display:inline-flex;align-items:center;gap:7px;transition:background .15s" onmouseover="this.style.background='#b91c1c'" onmouseout="this.style.background='#991b1b'" title="Open a print-ready report — use your browser's Print → Save as PDF">
+          <span style="font-size:14px">📄</span> Download as PDF
+        </button>
+      </div>
+    </div>
+  </div>
 
   <!-- Support Tier Selector — opt-btn radio style -->
   <input type="hidden" id="psm-sup-tier" value="85">
@@ -2249,7 +2359,22 @@ function recalcAz(env){
   setText('az-cpc-'+env+'-s','$'+fmt(effS)+'/mo');
   setText('az-cpc-'+env+'-m','$'+fmt(effM/cust)+'/mo');
   document.querySelectorAll('.az-cust-disp').forEach(el=>el.textContent=cust);
+  updateCompassDelta();
   buildAllEnv();updateInfraDisplay();updateDeployColumnStates();updateTopbar();
+}
+function updateCompassDelta(){
+  const el=document.getElementById('az-compass-delta');
+  if(!el)return;
+  const compass=num('az-compass-price');
+  if(!compass){el.textContent='Δ vs Single Tenant: —';el.style.color='var(--ink3)';el.style.background='var(--surface3)';el.style.borderColor='var(--border)';return;}
+  const stTotal=allAzST();
+  const delta=compass-stTotal;
+  const pct=stTotal>0?((delta/stTotal)*100).toFixed(1):'—';
+  const sign=delta>=0?'+':'−';
+  el.textContent='Δ vs ST: '+sign+'$'+fmt(Math.abs(delta))+' ('+(pct==='—'?'—':sign+Math.abs(pct)+'%')+')';
+  if(delta>0){el.style.color='#14532d';el.style.background='#f0fdf4';el.style.borderColor='#86efac';}
+  else if(delta<0){el.style.color='#991b1b';el.style.background='#fef2f2';el.style.borderColor='#fca5a5';}
+  else{el.style.color='var(--ink2)';el.style.background='var(--surface3)';el.style.borderColor='var(--border)';}
 }
 function recalcAllAz(){Object.keys(AZ).forEach(e=>recalcAz(e))}
 function allAzST(){return['prod','preprod','qa','dev'].reduce((a,e)=>a+getEff(e,'s'),0)}
@@ -2361,6 +2486,191 @@ function updateSecurity(){
 }
 
 // ═════════════════════════════════════
+// LICENSE COSTS (tooling, shared services)
+// ═════════════════════════════════════
+const LICENSE_PRESETS=[
+  {id:'lic-az-mp',   name:'Azure Marketplace License',       desc:'Third-party platform licenses purchased via Azure Marketplace', defVal:0},
+  {id:'lic-az-dev',  name:'Azure DevOps',                    desc:'Boards, Repos, Pipelines, Artifacts — per-user × headcount',   defVal:0},
+  {id:'lic-gh-self', name:'GitHub Enterprise (Self-Hosted)', desc:'GHES server — self-managed, per-user seats',                   defVal:0},
+  {id:'lic-gh-cloud',name:'GitHub Enterprise Cloud',         desc:'GitHub Enterprise Cloud — per-user seats',                     defVal:0},
+  {id:'lic-conflu',  name:'Confluence',                      desc:'Atlassian Confluence — documentation & knowledge base',        defVal:0},
+  {id:'lic-jira',    name:'Jira',                            desc:'Atlassian Jira — issue tracking & agile boards',               defVal:0},
+  {id:'lic-itsm',    name:'ITSM Platform',                   desc:'ServiceNow / Freshservice / Jira SM — incident & change mgmt', defVal:0},
+  {id:'lic-1pwd',    name:'1Password',                       desc:'Enterprise password manager — per-user',                       defVal:0},
+  {id:'lic-shared',  name:'Shared Services (Palo Alto FW / App Gateway / WAF)', desc:'Perimeter network — firewall, App Gateway, Web Application Firewall', defVal:0},
+  {id:'lic-cf',      name:'Cloudflare',                      desc:'CDN, DNS, WAF, Bot Management, Zero Trust',                    defVal:0},
+  {id:'lic-ddos',    name:'Azure DDoS Protection',           desc:'DDoS Protection Standard — distributed denial-of-service mitigation', defVal:0},
+  {id:'lic-obs',     name:'Observability',                   desc:'Datadog / New Relic / Grafana / App Insights — metrics, logs, traces', defVal:0},
+  {id:'lic-other',   name:'Others',                          desc:'Any other recurring tooling not captured above',               defVal:0},
+];
+// Dynamic custom license registry (id prefix 'lic-custom-')
+let LICENSE_CUSTOM=[]; // [{id, name, desc}]
+
+function syncLicCust(){
+  const v=num('lic-cust')||5;
+  const a=document.getElementById('az-cust'); if(a)a.value=v;
+  const c=document.getElementById('cust-count'); if(c)c.value=v;
+  if(typeof recalcAllAz==='function')recalcAllAz();
+  if(typeof updateSupport==='function')updateSupport();
+  if(typeof buildSummary==='function')buildSummary();
+}
+
+function renderLicenseTable(){
+  const tbody=document.getElementById('lic-tbody');
+  if(!tbody)return;
+  const all=[...LICENSE_PRESETS,...LICENSE_CUSTOM];
+  tbody.innerHTML=all.map(lic=>licenseRowHtml(lic)).join('');
+}
+
+function licenseRowHtml(lic){
+  const isCustom=lic.id.startsWith('lic-custom-');
+  const activeKey='licact-'+lic.id;
+  const active=localStorage.getItem(activeKey)!=='false'; // default = active
+  const nameCell=isCustom
+    ? `<input type="text" value="${(lic.name||'').replace(/"/g,'&quot;')}" data-lic-name="${lic.id}" class="fi-sm" style="width:100%;text-align:left;font-weight:600" oninput="updateCustomLicenseName('${lic.id}',this.value)" placeholder="Tool name">`
+    : `<div style="font-weight:600;font-size:12px;color:var(--ink)">${lic.name}</div>`;
+  const descCell=isCustom
+    ? `<input type="text" value="${(lic.desc||'').replace(/"/g,'&quot;')}" data-lic-desc="${lic.id}" class="fi-sm" style="width:100%;text-align:left" oninput="updateCustomLicenseDesc('${lic.id}',this.value)" placeholder="Description">`
+    : `<div style="font-size:11px;color:var(--ink3);line-height:1.5">${lic.desc}</div>`;
+  const removeBtn=isCustom
+    ? `<button onclick="removeCustomLicense('${lic.id}')" title="Remove this row" style="background:transparent;border:none;color:var(--red);cursor:pointer;font-size:15px;padding:2px 4px">🗑️</button>`
+    : '';
+  return `<tr id="lic-row-${lic.id}" data-lic-row="${lic.id}" class="${active?'':'lic-row-inactive'}">
+    <td>${nameCell}</td>
+    <td>${descCell}</td>
+    <td class="num-cell" style="background:${active?'#f0fdf4':'var(--surface3)'}">
+      <input class="fi-sm" type="number" id="${lic.id}" value="${lic.defVal||0}" min="0" step="any"
+        ${active?'':'disabled'}
+        style="border-color:${active?'#86efac':'var(--border)'};background:${active?'#ffffff':'var(--surface3)'};"
+        oninput="updateLicenses()">
+    </td>
+    <td class="num-cell" id="licyr-${lic.id}" style="color:var(--ink3)">—</td>
+    <td class="num-cell" id="licpc-${lic.id}" style="color:var(--green);font-weight:600">—</td>
+    <td style="text-align:center;white-space:nowrap">
+      <button onclick="toggleLicense('${lic.id}')" class="opt-btn ${active?'active-yes':''}" style="padding:3px 9px;font-size:10px;border-radius:6px;margin-right:4px" title="Toggle applicable / N/A">
+        <span class="opt-check" style="width:12px;height:12px;font-size:8px">${active?'✓':''}</span> ${active?'Active':'N/A'}
+      </button>
+      ${removeBtn}
+    </td>
+  </tr>`;
+}
+
+function toggleLicense(id){
+  const key='licact-'+id;
+  const current=localStorage.getItem(key)!=='false';
+  localStorage.setItem(key, current?'false':'true');
+  renderLicenseTable();
+  updateLicenses();
+  saveState();
+}
+
+function addCustomLicense(){
+  const newId='lic-custom-'+Date.now();
+  LICENSE_CUSTOM.push({id:newId,name:'',desc:'',defVal:0});
+  saveCustomLicenses();
+  renderLicenseTable();
+  updateLicenses();
+  // Focus the new name input
+  setTimeout(()=>{
+    const el=document.querySelector(`[data-lic-name="${newId}"]`);
+    if(el)el.focus();
+  },50);
+}
+
+function removeCustomLicense(id){
+  if(!confirm('Remove this license row?'))return;
+  LICENSE_CUSTOM=LICENSE_CUSTOM.filter(l=>l.id!==id);
+  localStorage.removeItem('licact-'+id);
+  saveCustomLicenses();
+  renderLicenseTable();
+  updateLicenses();
+  saveState();
+}
+
+function updateCustomLicenseName(id,val){
+  const l=LICENSE_CUSTOM.find(x=>x.id===id);
+  if(l){l.name=val;saveCustomLicenses();}
+}
+function updateCustomLicenseDesc(id,val){
+  const l=LICENSE_CUSTOM.find(x=>x.id===id);
+  if(l){l.desc=val;saveCustomLicenses();}
+}
+
+function saveCustomLicenses(){
+  try{localStorage.setItem('lic_custom_list',JSON.stringify(LICENSE_CUSTOM));}catch(e){}
+}
+function loadCustomLicenses(){
+  try{
+    const raw=localStorage.getItem('lic_custom_list');
+    if(raw)LICENSE_CUSTOM=JSON.parse(raw)||[];
+  }catch(e){LICENSE_CUSTOM=[];}
+}
+
+function resetLicenses(){
+  if(!confirm('Reset all license rows to zero and remove any custom tools?'))return;
+  LICENSE_PRESETS.forEach(l=>{
+    const el=document.getElementById(l.id);
+    if(el)el.value=l.defVal||0;
+    localStorage.removeItem('licact-'+l.id);
+  });
+  LICENSE_CUSTOM.forEach(l=>localStorage.removeItem('licact-'+l.id));
+  LICENSE_CUSTOM=[];
+  saveCustomLicenses();
+  renderLicenseTable();
+  updateLicenses();
+  saveState();
+}
+
+function getLicenseTotal(){
+  const all=[...LICENSE_PRESETS,...LICENSE_CUSTOM];
+  let totalMo=0, activeCount=0;
+  const items=[];
+  all.forEach(lic=>{
+    const active=localStorage.getItem('licact-'+lic.id)!=='false';
+    const v=active?num(lic.id):0;
+    if(active)activeCount++;
+    if(active&&v>0)totalMo+=v;
+    items.push({id:lic.id,name:lic.name,desc:lic.desc,monthly:v,active,isCustom:lic.id.startsWith('lic-custom-')});
+  });
+  const cust=Math.max(1,num('lic-cust')||num('az-cust')||num('cust-count')||5);
+  return{
+    total:totalMo,
+    totalYr:totalMo*12,
+    perCustomer:totalMo/cust,
+    activeCount,
+    items,
+    customerCount:cust,
+  };
+}
+
+function updateLicenses(){
+  // Refresh per-row yearly and per-customer cells
+  const cust=Math.max(1,num('lic-cust')||num('az-cust')||num('cust-count')||5);
+  const all=[...LICENSE_PRESETS,...LICENSE_CUSTOM];
+  all.forEach(lic=>{
+    const active=localStorage.getItem('licact-'+lic.id)!=='false';
+    const v=active?num(lic.id):0;
+    const yrEl=document.getElementById('licyr-'+lic.id);
+    const pcEl=document.getElementById('licpc-'+lic.id);
+    if(yrEl)yrEl.textContent=active?'$'+fmt(v*12):'—';
+    if(pcEl)pcEl.textContent=active?'$'+fmt(v/cust):'—';
+  });
+  const t=getLicenseTotal();
+  setText('lic-total-mo','$'+fmt(t.total)+'/mo');
+  setText('lic-total-yr','$'+fmt(t.totalYr)+'/yr');
+  setText('lic-total-pc','$'+fmt(t.perCustomer)+'/mo');
+  setText('lic-sum-mo','$'+fmt(t.total));
+  setText('lic-sum-yr','$'+fmt(t.totalYr));
+  setText('lic-sum-pc','$'+fmt(t.perCustomer));
+  setText('lic-sum-count',t.activeCount);
+  const badge=document.getElementById('lic-count-badge');
+  if(badge)badge.textContent=t.activeCount+' active';
+  // Cascade into summary + topbar
+  if(typeof buildSummary==='function'&&document.getElementById('pane-summary').classList.contains('active')) buildSummary();
+  updateTopbar();
+}
+
+// ═════════════════════════════════════
 // INTERNAL INFRA & DEVOPS
 // ═════════════════════════════════════
 function getInfraTotal(){
@@ -2392,8 +2702,10 @@ function buildSummary(){
   const margin=num('sup-margin')||15;
   const sec=getSecTotal();
   const inf=getInfraTotal();
+  const lic=getLicenseTotal();
   const secPerCust=sec.total/12/cust;
   const infraPerCust=inf.total/cust;
+  const licPerCust=lic.total/cust;
   const azAllST=allAzST();
   const azAllMT=['prod','preprod','qa','dev'].reduce((a,e)=>a+getEff(e,'m'),0);
   const s85pc=s85/cust, s247pc=s247/cust;
@@ -2430,7 +2742,7 @@ function buildSummary(){
       <div class="kpi-sub">${m.sub}</div>
       <div class="delta" style="background:var(--surface3);color:var(--ink4)">Not selected</div>
     </div>`;
-    const totalCOGS=m.infra+supPC+secPerCust+infraPerCust+m.compGov+m.itFte+m.modelPx;
+    const totalCOGS=m.infra+supPC+secPerCust+infraPerCust+licPerCust+m.compGov+m.itFte+m.modelPx;
     const margin_pct=m.rev>0?Math.round(((m.rev-totalCOGS)/m.rev)*100):0;
     const mc=margin_pct>65?'delta-pos':margin_pct>45?'delta-neu':'delta-neg';
     return `<div class="kpi"><div class="kpi-label">${m.icon} ${m.title}</div><div class="kpi-val">$${fmt(m.rev)}</div><div class="kpi-sub">${m.sub} · /mo/tenant</div><div class="delta ${mc}">${margin_pct}% est. gross margin (${supLabelShort})</div></div>`;
@@ -2439,7 +2751,7 @@ function buildSummary(){
   // Model cards
   document.getElementById('psm-cards').innerHTML=models.map(m=>{
     const modelSel=isModelSelected(m.id);
-    const totalCOGS=m.infra+supPC+secPerCust+infraPerCust+m.compGov+m.itFte+m.modelPx;
+    const totalCOGS=m.infra+supPC+secPerCust+infraPerCust+licPerCust+m.compGov+m.itFte+m.modelPx;
     const grossMargin=m.rev-totalCOGS;
     const margin_pct=m.rev>0?Math.round((grossMargin/m.rev)*100):0;
     const mc=margin_pct>65?{bg:'var(--green-light)',c:'var(--green)'}:margin_pct>45?{bg:'var(--blue-mid)',c:'var(--blue)'}:{bg:'var(--red-light)',c:'var(--red)'};
@@ -2475,6 +2787,7 @@ function buildSummary(){
         </div>
         <div class="psm-row"><span class="psm-row-label"><span class="cost-dot" style="background:#8b5cf6"></span> Security &amp; compliance (allocated)</span><span class="psm-row-val">$${fmt(secPerCust)}</span></div>
         <div class="psm-row"><span class="psm-row-label"><span class="cost-dot" style="background:#10b981"></span> Internal infra &amp; DevOps (allocated)</span><span class="psm-row-val">$${fmt(infraPerCust)}</span></div>
+        <div class="psm-row"><span class="psm-row-label"><span class="cost-dot" style="background:#f97316"></span> 📜 Licenses &amp; shared services (allocated)</span><span class="psm-row-val">${licPerCust>0?'$'+fmt(licPerCust):'$0'}</span></div>
         <div class="psm-row"><span class="psm-row-label"><span class="cost-dot" style="background:#f59e0b"></span> Compliance &amp; Governance / mo</span><span class="psm-row-val">${m.compGov>0?'$'+fmt(m.compGov):'$0'}</span></div>
         <div class="psm-row"><span class="psm-row-label"><span class="cost-dot" style="background:#6366f1"></span> Internal IT / FTE Overhead / mo</span><span class="psm-row-val">${m.itFte>0?'$'+fmt(m.itFte):'$0'}</span></div>
         ${hasModelPx?`<div class="psm-row"><span class="psm-row-label"><span class="cost-dot" style="background:#ec4899"></span> Model Pricing / mo</span><span class="psm-row-val">$${fmt(m.modelPx)}</span></div>`:''}
@@ -2500,6 +2813,12 @@ function buildSummary(){
         <div class="psm-row"><span class="psm-row-label">DevOps staff (loaded) / mo</span><span class="psm-row-val">$${fmt(inf.devopsStaff)}/mo</span></div>
         <div class="psm-row"><span class="psm-row-label">Total Internal Infra / mo</span><span class="psm-row-val" style="font-weight:600">$${fmt(inf.total)}/mo</span></div>
         <div class="psm-row"><span class="psm-row-label">Allocated per customer / mo</span><span class="psm-row-val" style="font-weight:600">$${fmt(infraPerCust)}/mo</span></div>
+
+        <div class="psm-section-hd">📜 Licenses &amp; Shared Services Highlight</div>
+        <div class="psm-row"><span class="psm-row-label">Active license rows</span><span class="psm-row-val">${lic.activeCount}</span></div>
+        <div class="psm-row"><span class="psm-row-label">Total licenses / mo</span><span class="psm-row-val" style="color:var(--orange)">$${fmt(lic.total)}/mo</span></div>
+        <div class="psm-row"><span class="psm-row-label">Total licenses / yr</span><span class="psm-row-val" style="color:var(--orange)">$${fmt(lic.totalYr)}/yr</span></div>
+        <div class="psm-row"><span class="psm-row-label">Allocated per customer / mo</span><span class="psm-row-val" style="font-weight:600">$${fmt(licPerCust)}/mo</span></div>
 
         <div class="psm-total-bar" style="background:${mc.bg}">
           <div><div class="psm-total-bar-label" style="color:${mc.c}">Gross Profit / month (${supLabelShort})</div><div class="psm-total-bar-val" style="color:${mc.c}">$${fmt(grossMargin)}</div></div>
@@ -2636,8 +2955,8 @@ function updateTopbar(){
 // ═════════════════════════════════════
 // SYNC COUNTS
 // ═════════════════════════════════════
-function syncAzCust(){const v=document.getElementById('az-cust').value;setVal('cust-count',v);setText('tb-cust',v);}
-function syncSupCust(){const v=document.getElementById('cust-count').value;setVal('az-cust',v);setText('tb-cust',v);}
+function syncAzCust(){const v=document.getElementById('az-cust').value;setVal('cust-count',v);setVal('lic-cust',v);setText('tb-cust',v);if(typeof updateLicenses==='function')updateLicenses();}
+function syncSupCust(){const v=document.getElementById('cust-count').value;setVal('az-cust',v);setVal('lic-cust',v);setText('tb-cust',v);if(typeof updateLicenses==='function')updateLicenses();}
 
 // ═════════════════════════════════════
 // AI CHAT
@@ -2646,8 +2965,9 @@ let chatHistory=[];
 function gatherCtx(){
   const cust=Math.max(1,num('cust-count'));
   const s85=getS85(),s247=getS247(),sec=getSecTotal(),inf=getInfraTotal();
+  const lic=getLicenseTotal();
   const azAll=allAzST();const margin=num('sup-margin')||15;
-  return{customers:cust,deploymentModels:{singleTenantVendor:{platformFee:num('plat-stv'),infraCOGS:num('infra-stv'),onboarding:num('onb-stv')},multiTenant:{platformFee:num('plat-mt'),infraCOGS:num('infra-mt'),onboarding:num('onb-mt')},singleTenantClient:{platformFee:num('plat-stc'),onboarding:num('onb-stc')},onPremises:{platformFee:num('plat-op'),onboarding:num('onb-op'),annualLicense:num('op-lic-yr')}},azure:{allEnvsST:azAll,prod:{st:getEff('prod','s'),mt:getEff('prod','m')},chargePerCustomer:Math.round(azAll/cust)},support:{opt8x5:{monthly:Math.round(s85),perCust:Math.round(s85/cust),feeCharged:Math.round(s85/cust/(1-margin/100))},opt24x7:{monthly:Math.round(s247),perCust:Math.round(s247/cust),feeCharged:Math.round(s247/cust/(1-margin/100))}},security:{vapt:Math.round(sec.vapt),llmTesting:Math.round(sec.llm),audits:Math.round(sec.audit),socMonitoring:Math.round(sec.socSvc+sec.siemSvc),totalAnnual:Math.round(sec.total),perCustomerMonthly:Math.round(sec.total/12/cust)},internalInfra:{devopsTools:Math.round(inf.devopsTools),internalAzure:Math.round(inf.intInfra),devopsStaff:Math.round(inf.devopsStaff),totalMonthly:Math.round(inf.total),perCustomerMonthly:Math.round(inf.total/cust)},onPremises:{hardwareCost:num('op-hw-servers')+num('op-hw-net')+num('op-hw-storage')+num('op-hw-power'),deploymentCost:num('op-deploy-onsite')+num('op-deploy-setup')+num('op-deploy-net')+num('op-deploy-uat'),professionalServices:num('op-ps-migration')+num('op-ps-training')+num('op-ps-integration')+num('op-ps-pm')}};
+  return{customers:cust,deploymentModels:{singleTenantVendor:{platformFee:num('plat-stv'),infraCOGS:num('infra-stv'),onboarding:num('onb-stv')},multiTenant:{platformFee:num('plat-mt'),infraCOGS:num('infra-mt'),onboarding:num('onb-mt')},singleTenantClient:{platformFee:num('plat-stc'),onboarding:num('onb-stc')},onPremises:{platformFee:num('plat-op'),onboarding:num('onb-op'),annualLicense:num('op-lic-yr')}},azure:{allEnvsST:azAll,prod:{st:getEff('prod','s'),mt:getEff('prod','m')},chargePerCustomer:Math.round(azAll/cust),compassBenchmark:num('az-compass-price')},support:{opt8x5:{monthly:Math.round(s85),perCust:Math.round(s85/cust),feeCharged:Math.round(s85/cust/(1-margin/100))},opt24x7:{monthly:Math.round(s247),perCust:Math.round(s247/cust),feeCharged:Math.round(s247/cust/(1-margin/100))}},security:{vapt:Math.round(sec.vapt),llmTesting:Math.round(sec.llm),audits:Math.round(sec.audit),socMonitoring:Math.round(sec.socSvc+sec.siemSvc),totalAnnual:Math.round(sec.total),perCustomerMonthly:Math.round(sec.total/12/cust)},internalInfra:{devopsTools:Math.round(inf.devopsTools),internalAzure:Math.round(inf.intInfra),devopsStaff:Math.round(inf.devopsStaff),totalMonthly:Math.round(inf.total),perCustomerMonthly:Math.round(inf.total/cust)},licenses:{activeCount:lic.activeCount,totalMonthly:Math.round(lic.total),totalAnnual:Math.round(lic.totalYr),perCustomerMonthly:Math.round(lic.perCustomer*100)/100,items:lic.items.filter(i=>i.active&&i.monthly>0).map(i=>({name:i.name,monthly:Math.round(i.monthly)}))},onPremises:{hardwareCost:num('op-hw-servers')+num('op-hw-net')+num('op-hw-storage')+num('op-hw-power'),deploymentCost:num('op-deploy-onsite')+num('op-deploy-setup')+num('op-deploy-net')+num('op-deploy-uat'),professionalServices:num('op-ps-migration')+num('op-ps-training')+num('op-ps-integration')+num('op-ps-pm')}};
 }
 function updateCtxPanel(){
   const ctx=gatherCtx();const c=document.getElementById('ctx-body');if(!c)return;
@@ -3087,6 +3407,13 @@ function exportXLS(){
   });
   azRows.push(['GRAND TOTAL — All Environments','',azST,azMT,'']);
   azRows.push(['Charge per customer ('+cust+' customers)','',azST/cust,azMT/cust,'']);
+  azRows.push(['']);
+  const compassPrice=num('az-compass-price');
+  azRows.push(['Compass Price (reference / benchmark, USD/month)','',compassPrice,'','Benchmark price entered in Azure Pricing tab']);
+  if(compassPrice>0){
+    azRows.push(['Delta vs ST Grand Total','',compassPrice-azST,'',(azST>0?((compassPrice-azST)/azST*100).toFixed(1)+'%':'')]);
+    azRows.push(['Delta vs MT Grand Total','',compassPrice-azMT,'',(azMT>0?((compassPrice-azMT)/azMT*100).toFixed(1)+'%':'')]);
+  }
   const ws2=XLSX.utils.aoa_to_sheet(azRows);
   ws2['!cols']=[{wch:20},{wch:36},{wch:22},{wch:22},{wch:28}];
   XLSX.utils.book_append_sheet(wb,ws2,'Azure Pricing');
@@ -3189,6 +3516,24 @@ function exportXLS(){
   ws5['!cols']=[{wch:20},{wch:42},{wch:24}];
   XLSX.utils.book_append_sheet(wb,ws5,'Internal Infra & DevOps');
 
+  // ── Sheet 5B: Licenses & Shared Services ──
+  const licT=getLicenseTotal();
+  const licData=[
+    ['License Costs, Tooling & Shared Services','','','',''],
+    ['Customers:',licT.customerCount,'','',''],
+    [''],
+    ['Tool / License','Description','Monthly Cost (USD)','Annual Cost (USD)','Status'],
+  ];
+  licT.items.forEach(it=>{
+    licData.push([it.name||'(unnamed)', it.desc||'', it.active?it.monthly:0, it.active?it.monthly*12:0, it.active?'Active':'N/A']);
+  });
+  licData.push(['']);
+  licData.push(['GRAND TOTAL / month','',licT.total,licT.totalYr,licT.activeCount+' active rows']);
+  licData.push(['Allocated per customer / month ('+licT.customerCount+' customers)','',Math.round(licT.perCustomer*100)/100,'','']);
+  const wsLic=XLSX.utils.aoa_to_sheet(licData);
+  wsLic['!cols']=[{wch:38},{wch:44},{wch:20},{wch:20},{wch:14}];
+  XLSX.utils.book_append_sheet(wb,wsLic,'Licenses');
+
   // ── Sheet 6: On-Premises ──
   const hwT=num('op-hw-servers')+num('op-hw-net')+num('op-hw-storage')+num('op-hw-power');
   const depT=num('op-deploy-onsite')+num('op-deploy-setup')+num('op-deploy-net')+num('op-deploy-uat');
@@ -3240,6 +3585,8 @@ function exportXLS(){
   // ── Sheet 7: Pricing Summary ──
   const supTierXls=(document.getElementById('psm-sup-tier')?.value||'85')==='247'?'24×7':'8×5';
   const supCostXls=(document.getElementById('psm-sup-tier')?.value||'85')==='247'?s247:s85;
+  const licSum=licT; // reuse totals already computed for the Licenses sheet above
+  const licPerCustXls=licSum.total/cust;
   const sumData=[
     ['Pricing Summary — All Models','','','',''],
     ['Generated:',new Date().toLocaleDateString(),'Customers:',cust,'Support tier: '+supTierXls],
@@ -3252,6 +3599,8 @@ function exportXLS(){
     ['Support Cost per customer / month ('+supTierXls+')', Math.round(supCostXls/cust), Math.round(supCostXls/cust), Math.round(supCostXls/cust), Math.round(supCostXls/cust)],
     ['Security & Compliance per customer / month', Math.round(sec.total/12/cust), Math.round(sec.total/12/cust), Math.round(sec.total/12/cust), 'N/A'],
     ['Internal Infra & DevOps per customer / month', Math.round(inf.total/cust), Math.round(inf.total/cust), Math.round(inf.total/cust), 'N/A'],
+    ['Licenses & Shared Services / month (total, '+licSum.activeCount+' active)', Math.round(licSum.total), Math.round(licSum.total), Math.round(licSum.total), Math.round(licSum.total)],
+    ['Licenses & Shared Services per customer / month', Math.round(licPerCustXls), Math.round(licPerCustXls), Math.round(licPerCustXls), Math.round(licPerCustXls)],
     ['Compliance & Governance / year', num('comp-gov-stv'), num('comp-gov-mt'), num('comp-gov-stc'), num('comp-gov-op')],
     ['Compliance & Governance / month', Math.round(num('comp-gov-stv')/12), Math.round(num('comp-gov-mt')/12), Math.round(num('comp-gov-stc')/12), Math.round(num('comp-gov-op')/12)],
     ['Internal IT / FTE Overhead / year', num('it-fte-stv'), num('it-fte-mt'), num('it-fte-stc'), num('it-fte-op')],
@@ -3259,14 +3608,14 @@ function exportXLS(){
     ['Model Pricing / year', num('model-price-stv'), num('model-price-mt'), 'N/A — Client managed', 'N/A — On-Premises'],
     ['Model Pricing / month', Math.round(num('model-price-stv')/12), Math.round(num('model-price-mt')/12), 'N/A', 'N/A'],
     ['Total COGS per customer / month',
-      Math.round(allAzST()+supCostXls/cust+sec.total/12/cust+inf.total/cust+num('comp-gov-stv')/12+num('it-fte-stv')/12+num('model-price-stv')/12),
-      Math.round(azMT/cust+supCostXls/cust+sec.total/12/cust+inf.total/cust+num('comp-gov-mt')/12+num('it-fte-mt')/12+num('model-price-mt')/12),
-      Math.round(supCostXls/cust+sec.total/12/cust+inf.total/cust+num('comp-gov-stc')/12+num('it-fte-stc')/12),
+      Math.round(allAzST()+supCostXls/cust+sec.total/12/cust+inf.total/cust+licPerCustXls+num('comp-gov-stv')/12+num('it-fte-stv')/12+num('model-price-stv')/12),
+      Math.round(azMT/cust+supCostXls/cust+sec.total/12/cust+inf.total/cust+licPerCustXls+num('comp-gov-mt')/12+num('it-fte-mt')/12+num('model-price-mt')/12),
+      Math.round(supCostXls/cust+sec.total/12/cust+inf.total/cust+licPerCustXls+num('comp-gov-stc')/12+num('it-fte-stc')/12),
       'N/A'],
     ['Gross Profit per customer / month',
-      Math.round(num('plat-stv')-(allAzST()+supCostXls/cust+sec.total/12/cust+inf.total/cust+num('comp-gov-stv')/12+num('it-fte-stv')/12+num('model-price-stv')/12)),
-      Math.round(num('plat-mt')-(azMT/cust+supCostXls/cust+sec.total/12/cust+inf.total/cust+num('comp-gov-mt')/12+num('it-fte-mt')/12+num('model-price-mt')/12)),
-      Math.round(num('plat-stc')-(supCostXls/cust+sec.total/12/cust+inf.total/cust+num('comp-gov-stc')/12+num('it-fte-stc')/12)),
+      Math.round(num('plat-stv')-(allAzST()+supCostXls/cust+sec.total/12/cust+inf.total/cust+licPerCustXls+num('comp-gov-stv')/12+num('it-fte-stv')/12+num('model-price-stv')/12)),
+      Math.round(num('plat-mt')-(azMT/cust+supCostXls/cust+sec.total/12/cust+inf.total/cust+licPerCustXls+num('comp-gov-mt')/12+num('it-fte-mt')/12+num('model-price-mt')/12)),
+      Math.round(num('plat-stc')-(supCostXls/cust+sec.total/12/cust+inf.total/cust+licPerCustXls+num('comp-gov-stc')/12+num('it-fte-stc')/12)),
       'N/A'],
     ['Deployment fee (one-time)', num('onb-stv'), num('onb-mt'), num('onb-stc'), num('onb-op')],
     ['Professional Services — Customisation / Integration ($)', num('ps-stv'), num('ps-mt'), num('ps-stc'), num('ps-op')],
@@ -3280,7 +3629,225 @@ function exportXLS(){
   ws7['!cols']=[{wch:42},{wch:22},{wch:22},{wch:22},{wch:22}];
   XLSX.utils.book_append_sheet(wb,ws7,'Pricing Summary');
 
+  // Add Compass Price benchmark row if entered
+  const compassPx=num('az-compass-price');
+  if(compassPx>0){
+    const compassRow=[
+      [''],
+      ['🧭 Azure Compass Price — Benchmark','','','',''],
+      ['Compass Price (USD/month)','','','',compassPx],
+      ['Compass Price (USD/year)','','','',compassPx*12],
+      ['Delta vs Azure ST Grand Total (USD/month)','','','',compassPx-azST],
+      ['Delta vs Azure MT Grand Total (USD/month)','','','',compassPx-azMT],
+    ];
+    compassRow.forEach(r=>XLSX.utils.sheet_add_aoa(ws7,[r],{origin:-1}));
+  }
+
   XLSX.writeFile(wb,'SaaS_Pricing_Report_'+new Date().toISOString().slice(0,10)+'.xlsx');
+}
+
+
+// ═══════════════════════════════════════
+// PDF EXPORT — Pricing Summary
+// ═══════════════════════════════════════
+function exportSummaryPDF(){
+  const cust=Math.max(1,parseInt(document.getElementById('cust-count')?.value||5));
+  const s85=getS85(),s247=getS247();
+  const sec=getSecTotal(),inf=getInfraTotal();
+  const lic=getLicenseTotal();
+  const azST=allAzST(),azMT=allAzMT();
+  const compassPx=num('az-compass-price');
+  const supTier=(document.getElementById('psm-sup-tier')?.value||'85');
+  const supTierLbl=supTier==='247'?'24×7 Premium':'8×5 Standard';
+  const supCost=supTier==='247'?s247:s85;
+  const today=new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'});
+  const productName=(getProductsList().find(p=>p.id===getCurrentProductId())?.name)||'SaaS Platform';
+
+  // Per-model totals for the summary table
+  const models=[
+    {id:'stv',label:'Single Tenant — Vendor Cloud',icon:'🔒',price:num('plat-stv'),onb:num('onb-stv'),ps:num('ps-stv'),infra:azST,compGov:num('comp-gov-stv'),itFte:num('it-fte-stv'),modelPx:num('model-price-stv')},
+    {id:'mt', label:'Multi-Tenant SaaS',            icon:'🌐',price:num('plat-mt'), onb:num('onb-mt'), ps:num('ps-mt'), infra:azMT/cust,compGov:num('comp-gov-mt'), itFte:num('it-fte-mt'), modelPx:num('model-price-mt')},
+    {id:'stc',label:'Single Tenant — Client Cloud', icon:'🏢',price:num('plat-stc'),onb:num('onb-stc'),ps:num('ps-stc'),infra:0,     compGov:num('comp-gov-stc'),itFte:num('it-fte-stc'),modelPx:0},
+    {id:'op', label:'On-Premises',                   icon:'🖥️',price:Math.round(num('op-lic-yr')/12),onb:num('onb-op'),ps:num('ps-op'),infra:0,compGov:num('comp-gov-op'),itFte:num('it-fte-op'),modelPx:0},
+  ];
+  models.forEach(m=>{
+    const supPerCust=supCost/cust;
+    const secPerCust=sec.total/12/cust;
+    const infPerCust=inf.total/cust;
+    const licPerCust=lic.total/cust;
+    const cogGov=m.compGov/12;
+    const cogFte=m.itFte/12;
+    const cogModel=m.modelPx/12;
+    m.cogs=Math.round(m.infra+supPerCust+secPerCust+infPerCust+licPerCust+cogGov+cogFte+cogModel);
+    m.gp=Math.round(m.price-m.cogs);
+    m.marginPct=m.price>0?((m.gp/m.price)*100).toFixed(1):'—';
+  });
+
+  const rowsHtml=models.map(m=>`
+    <tr>
+      <td style="font-weight:600">${m.icon} ${m.label}</td>
+      <td class="num">$${fmt(m.price)}</td>
+      <td class="num">$${fmt(m.price*12)}</td>
+      <td class="num">$${fmt(m.cogs)}</td>
+      <td class="num ${m.gp>=0?'pos':'neg'}">$${fmt(m.gp)}</td>
+      <td class="num ${m.gp>=0?'pos':'neg'}">${m.marginPct}${m.marginPct==='—'?'':'%'}</td>
+    </tr>`).join('');
+
+  const compassBlock=compassPx>0?`
+    <div class="pdf-section">
+      <h2>🧭 Azure Compass Price — Benchmark</h2>
+      <table class="pdf-table">
+        <thead><tr><th>Item</th><th class="num">USD / month</th><th class="num">USD / year</th><th>Variance vs Azure COGS</th></tr></thead>
+        <tbody>
+          <tr><td>Compass Price (benchmark)</td><td class="num">$${fmt(compassPx)}</td><td class="num">$${fmt(compassPx*12)}</td><td>—</td></tr>
+          <tr><td>Your Single Tenant Azure total</td><td class="num">$${fmt(azST)}</td><td class="num">$${fmt(azST*12)}</td><td class="${compassPx-azST>=0?'pos':'neg'}">${compassPx-azST>=0?'+':'−'}$${fmt(Math.abs(compassPx-azST))} (${azST>0?(((compassPx-azST)/azST)*100).toFixed(1):'—'}%)</td></tr>
+          <tr><td>Your Multi-Tenant Azure total</td><td class="num">$${fmt(azMT)}</td><td class="num">$${fmt(azMT*12)}</td><td class="${compassPx-azMT>=0?'pos':'neg'}">${compassPx-azMT>=0?'+':'−'}$${fmt(Math.abs(compassPx-azMT))} (${azMT>0?(((compassPx-azMT)/azMT)*100).toFixed(1):'−'}%)</td></tr>
+        </tbody>
+      </table>
+    </div>`:'';
+
+  // Licenses block — only render active rows with a cost > 0 to keep the PDF clean
+  const activeLicItems=lic.items.filter(it=>it.active && it.monthly>0);
+  const licensesBlock=(lic.total>0 || lic.activeCount>0)?`
+    <div class="pdf-section">
+      <h2>📜 License Costs, Tooling &amp; Shared Services</h2>
+      ${activeLicItems.length>0?`<table class="pdf-table">
+        <thead><tr><th>Tool / License</th><th>Description</th><th class="num">$/month</th><th class="num">$/year</th><th class="num">Per-cust /mo</th></tr></thead>
+        <tbody>
+          ${activeLicItems.map(it=>`<tr><td style="font-weight:600">${(it.name||'(unnamed)').replace(/</g,'&lt;')}</td><td style="font-size:10px;color:#64748b">${(it.desc||'').replace(/</g,'&lt;')}</td><td class="num">$${fmt(it.monthly)}</td><td class="num">$${fmt(it.monthly*12)}</td><td class="num">$${fmt(it.monthly/cust)}</td></tr>`).join('')}
+          <tr style="background:#0e1e3d;color:#fff"><td colspan="2" style="font-weight:700">GRAND TOTAL — ${lic.activeCount} active license${lic.activeCount===1?'':'s'}</td><td class="num" style="color:#93c5fd;font-weight:700">$${fmt(lic.total)}</td><td class="num" style="color:#93c5fd;font-weight:700">$${fmt(lic.totalYr)}</td><td class="num" style="color:#6ee7b7;font-weight:700">$${fmt(lic.perCustomer)}</td></tr>
+        </tbody>
+      </table>`:'<div class="pdf-notes">No active license costs entered. Configure in the Licenses tab.</div>'}
+      <div class="pdf-notes"><strong>Allocation:</strong> License costs are total monthly spend, amortised equally across ${cust} customer${cust===1?'':'s'} (${fmt(lic.perCustomer)} per customer per month). This allocation is included in Total COGS and margin calculations.</div>
+    </div>`:'';
+
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8">
+<title>Pricing Summary Report — ${today}</title>
+<style>
+@page{size:A4;margin:16mm}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter','Segoe UI',system-ui,sans-serif;color:#0f172a;background:#fff;padding:28px 34px;font-size:12px;line-height:1.55}
+.pdf-header{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:14px;border-bottom:3px solid #0e1e3d;margin-bottom:22px}
+.pdf-brand{font-size:22px;font-weight:800;color:#0e1e3d;letter-spacing:-.02em}
+.pdf-brand-sub{font-size:11px;color:#64748b;font-family:'JetBrains Mono',monospace;margin-top:3px;letter-spacing:.04em}
+.pdf-meta{text-align:right;font-size:11px;color:#475569;line-height:1.8}
+.pdf-meta strong{color:#0f172a}
+.pdf-hero{background:linear-gradient(135deg,#0e1e3d 0%,#1e3460 100%);color:#fff;padding:22px 26px;border-radius:10px;margin-bottom:20px}
+.pdf-hero-label{font-size:10px;font-family:'JetBrains Mono',monospace;letter-spacing:.12em;color:#93c5fd;text-transform:uppercase;margin-bottom:6px}
+.pdf-hero-title{font-size:22px;font-weight:800;letter-spacing:-.02em;margin-bottom:6px}
+.pdf-hero-sub{font-size:12px;color:#cbd5e1}
+.pdf-kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:16px 0 22px}
+.pdf-kpi{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px 14px;text-align:center}
+.pdf-kpi-val{font-size:18px;font-weight:800;color:#0e1e3d;margin-bottom:2px;font-family:'JetBrains Mono',monospace}
+.pdf-kpi-lbl{font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+.pdf-section{margin-bottom:22px;page-break-inside:avoid}
+.pdf-section h2{font-size:14px;font-weight:700;color:#0e1e3d;margin-bottom:10px;padding-bottom:5px;border-bottom:2px solid #e2e8f0;display:flex;align-items:center;gap:8px}
+.pdf-table{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:10px}
+.pdf-table thead th{background:#0e1e3d;color:#fff;padding:9px 10px;text-align:left;font-weight:600;font-size:10px;letter-spacing:.04em;text-transform:uppercase}
+.pdf-table thead th.num{text-align:right}
+.pdf-table tbody td{padding:8px 10px;border-bottom:1px solid #e2e8f0}
+.pdf-table tbody tr:nth-child(even) td{background:#f8fafc}
+.pdf-table .num{text-align:right;font-family:'JetBrains Mono',monospace;font-weight:500}
+.pdf-table .pos{color:#065f46}
+.pdf-table .neg{color:#991b1b}
+.pdf-footer{margin-top:28px;padding-top:14px;border-top:2px solid #e2e8f0;display:flex;justify-content:space-between;font-size:10px;color:#94a3b8;font-family:'JetBrains Mono',monospace}
+.pdf-notes{background:#f0f9ff;border-left:3px solid #0ea5e9;padding:10px 14px;font-size:10.5px;color:#0c4a6e;border-radius:4px;line-height:1.65;margin-top:8px}
+@media print{body{padding:0}.pdf-section{page-break-inside:avoid}}
+</style></head><body>
+
+<div class="pdf-header">
+  <div>
+    <div class="pdf-brand">SaaS Pricing Report</div>
+    <div class="pdf-brand-sub">${productName} · Pricing Summary</div>
+  </div>
+  <div class="pdf-meta">
+    <div><strong>Generated:</strong> ${today}</div>
+    <div><strong>Customers modelled:</strong> ${cust}</div>
+    <div><strong>Active support tier:</strong> ${supTierLbl}</div>
+  </div>
+</div>
+
+<div class="pdf-hero">
+  <div class="pdf-hero-label">Commercial Pricing Summary</div>
+  <div class="pdf-hero-title">${productName}</div>
+  <div class="pdf-hero-sub">Complete pricing breakdown across all four deployment models — Azure COGS, support, security, compliance and margin analysis.</div>
+</div>
+
+<div class="pdf-kpi-row">
+  <div class="pdf-kpi"><div class="pdf-kpi-val">${cust}</div><div class="pdf-kpi-lbl">Customers</div></div>
+  <div class="pdf-kpi"><div class="pdf-kpi-val">$${fmt(azST)}</div><div class="pdf-kpi-lbl">Azure ST /mo</div></div>
+  <div class="pdf-kpi"><div class="pdf-kpi-val">$${fmt(Math.round(supCost))}</div><div class="pdf-kpi-lbl">Support ${supTierLbl}</div></div>
+  <div class="pdf-kpi"><div class="pdf-kpi-val">$${fmt(lic.total)}</div><div class="pdf-kpi-lbl">Licenses /mo (${lic.activeCount})</div></div>
+</div>
+
+<div class="pdf-section">
+  <h2>📦 Deployment Model Pricing</h2>
+  <table class="pdf-table">
+    <thead><tr><th>Deployment Model</th><th class="num">Price /mo</th><th class="num">Price /yr</th><th class="num">COGS /mo</th><th class="num">Gross Profit /mo</th><th class="num">Margin %</th></tr></thead>
+    <tbody>${rowsHtml}</tbody>
+  </table>
+  <div class="pdf-notes">
+    <strong>COGS includes:</strong> Azure infra per customer · ${supTierLbl} support allocated per customer · Security &amp; compliance amortised · Internal infra &amp; DevOps allocated · Compliance/governance · Internal IT/FTE overhead · AI model costs (where applicable).
+  </div>
+</div>
+
+<div class="pdf-section">
+  <h2>☁️ Azure Infrastructure COGS</h2>
+  <table class="pdf-table">
+    <thead><tr><th>Metric</th><th class="num">Single Tenant</th><th class="num">Multi-Tenant</th></tr></thead>
+    <tbody>
+      <tr><td>Grand Total — all environments ($/month)</td><td class="num">$${fmt(azST)}</td><td class="num">$${fmt(azMT)}</td></tr>
+      <tr><td>Grand Total — all environments ($/year)</td><td class="num">$${fmt(azST*12)}</td><td class="num">$${fmt(azMT*12)}</td></tr>
+      <tr><td>Per customer allocation ($/month, ${cust} customers)</td><td class="num">$${fmt(azST)}</td><td class="num">$${fmt(Math.round(azMT/cust))}</td></tr>
+    </tbody>
+  </table>
+</div>
+
+${compassBlock}
+
+${licensesBlock}
+
+<div class="pdf-section">
+  <h2>💼 Cost Components Breakdown (per customer / month)</h2>
+  <table class="pdf-table">
+    <thead><tr><th>Component</th><th class="num">ST Vendor</th><th class="num">Multi-Tenant</th><th class="num">ST Client</th><th class="num">On-Premises</th></tr></thead>
+    <tbody>
+      <tr><td>Baseline License</td><td class="num">$${fmt(num('plat-stv'))}</td><td class="num">$${fmt(num('plat-mt'))}</td><td class="num">$${fmt(num('plat-stc'))}</td><td class="num">$${fmt(Math.round(num('op-lic-yr')/12))}</td></tr>
+      <tr><td>Azure Infra COGS</td><td class="num">$${fmt(azST)}</td><td class="num">$${fmt(Math.round(azMT/cust))}</td><td class="num">$0</td><td class="num">$0</td></tr>
+      <tr><td>Support (${supTierLbl})</td><td class="num">$${fmt(Math.round(supCost/cust))}</td><td class="num">$${fmt(Math.round(supCost/cust))}</td><td class="num">$${fmt(Math.round(supCost/cust))}</td><td class="num">$${fmt(Math.round(supCost/cust))}</td></tr>
+      <tr><td>Security &amp; Compliance</td><td class="num">$${fmt(Math.round(sec.total/12/cust))}</td><td class="num">$${fmt(Math.round(sec.total/12/cust))}</td><td class="num">$${fmt(Math.round(sec.total/12/cust))}</td><td class="num">N/A</td></tr>
+      <tr><td>Internal Infra &amp; DevOps</td><td class="num">$${fmt(Math.round(inf.total/cust))}</td><td class="num">$${fmt(Math.round(inf.total/cust))}</td><td class="num">$${fmt(Math.round(inf.total/cust))}</td><td class="num">N/A</td></tr>
+      <tr style="background:#fff7ed"><td><strong>📜 Licenses &amp; Shared Services</strong></td><td class="num">$${fmt(Math.round(lic.perCustomer))}</td><td class="num">$${fmt(Math.round(lic.perCustomer))}</td><td class="num">$${fmt(Math.round(lic.perCustomer))}</td><td class="num">$${fmt(Math.round(lic.perCustomer))}</td></tr>
+      <tr><td>Compliance &amp; Governance</td><td class="num">$${fmt(Math.round(num('comp-gov-stv')/12))}</td><td class="num">$${fmt(Math.round(num('comp-gov-mt')/12))}</td><td class="num">$${fmt(Math.round(num('comp-gov-stc')/12))}</td><td class="num">$${fmt(Math.round(num('comp-gov-op')/12))}</td></tr>
+      <tr><td>Internal IT / FTE Overhead</td><td class="num">$${fmt(Math.round(num('it-fte-stv')/12))}</td><td class="num">$${fmt(Math.round(num('it-fte-mt')/12))}</td><td class="num">$${fmt(Math.round(num('it-fte-stc')/12))}</td><td class="num">$${fmt(Math.round(num('it-fte-op')/12))}</td></tr>
+      <tr><td>AI Model Pricing</td><td class="num">$${fmt(Math.round(num('model-price-stv')/12))}</td><td class="num">$${fmt(Math.round(num('model-price-mt')/12))}</td><td class="num">N/A</td><td class="num">N/A</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="pdf-section">
+  <h2>💵 One-Time Fees</h2>
+  <table class="pdf-table">
+    <thead><tr><th>Fee Type</th><th class="num">ST Vendor</th><th class="num">Multi-Tenant</th><th class="num">ST Client</th><th class="num">On-Premises</th></tr></thead>
+    <tbody>
+      <tr><td>Deployment / Implementation</td><td class="num">$${fmt(num('onb-stv'))}</td><td class="num">$${fmt(num('onb-mt'))}</td><td class="num">$${fmt(num('onb-stc'))}</td><td class="num">$${fmt(num('onb-op'))}</td></tr>
+      <tr><td>Professional Services (customisation/integration)</td><td class="num">$${fmt(num('ps-stv'))}</td><td class="num">$${fmt(num('ps-mt'))}</td><td class="num">$${fmt(num('ps-stc'))}</td><td class="num">$${fmt(num('ps-op'))}</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="pdf-footer">
+  <div>${productName} — Internal Pricing Summary (Confidential)</div>
+  <div>Generated ${today} · ${cust} customers · ${supTierLbl}</div>
+</div>
+
+<script>window.onload=function(){setTimeout(function(){window.print()},300)}<\/script>
+</body></html>`;
+
+  const w=window.open('','_blank');
+  if(!w){alert('Popup blocked. Please allow popups for this site to download the PDF.');return;}
+  w.document.write(html);
+  w.document.close();
 }
 
 
@@ -5050,7 +5617,11 @@ window.onload=function(){
   restoreSecBlocks();
   restoreOpBlocks();
   restoreRowToggles();
-  updateDeploy();updateSupport();updateSecurity();updateInfra();updateInfraDisplay();updateTopbar();
+  // Licenses — load custom tools, render table, then apply values from loadState
+  loadCustomLicenses();
+  renderLicenseTable();
+  loadState(); // re-apply saved values to license inputs now that the table exists
+  updateDeploy();updateSupport();updateSecurity();updateInfra();updateInfraDisplay();updateLicenses();updateTopbar();
   recalcAllAz();
   hookAutoSave();
   checkApiKeyBanner();
